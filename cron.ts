@@ -19,7 +19,7 @@ const fetchTodaysEnergyPrices = async (): Promise < {
 
     enum EnergyType {
         Power = "1",
-            Gas = "3"
+        Gas = "3"
     }
 
     const fetchPrices = async (type: EnergyType, fromDate: Date, tillDate: Date): Promise < Prices > => {
