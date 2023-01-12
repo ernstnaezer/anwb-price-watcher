@@ -23,4 +23,4 @@ Once you have your accounts and channel integration ready, the following steps s
 
 ### Test run 💪🏻
 
-For a test run and to see the ‼️ ANWB price Alert‼️  message appear in your Slack, set the prices to a very low threshold (0 for example) and hit Play ▶️ 
+For a test run and to see the ‼️ ANWB price Alert ‼️  message appear in your Slack, set the prices to a very low threshold (0 for example) and hit Play ▶️ 
