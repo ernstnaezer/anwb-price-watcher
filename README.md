@@ -5,7 +5,7 @@ This project provides code to monitor today's prices of [ANWB Energie](https://w
 Prices are updated every morning around 6am for the next 24hr. This Crow job pulls their API and pushes out a Slack alerts when prices are too high for your taste, allowing you time to turn off stuff and pull out an extra sweater for the day ⛄️.
 
 ## How to DID 🛠️
-To host this code for yourself, you'll need a [Slack](https://slack.com), setup [Web hook notifications](https://api.slack.com/messaging/webhooks) and sign up for [repeat.dev](https://repeat.dev). Given the low volume of repeats and messages, all should be free.
+To host this code for yourself, you'll need a [Slack](https://slack.com), setup [Web hook integrations](https://api.slack.com/messaging/webhooks) and sign up for [repeat.dev](https://repeat.dev). Given the low volume of repeats and messages, all should be free.
 
 Once you have your accounts and channel integration ready, the following steps should get you going: 
 
