@@ -1,7 +1,6 @@
 # ANWB Dynamic Energy Pricing Alert
 
-This project provides code to monitor today's prices of [ANWB Energie](https://www.anwb.nl/huis/energie/anwb-energie). 
-ANWB Energie is a dynamic pricing contract, so power and gas prices vary per day / hour.
+This project provides code to monitor today's prices of [ANWB Energie](https://www.anwb.nl/huis/energie/anwb-energie). ANWB Energie is a dynamic pricing contract, so power and gas prices vary per day / hour. You can view the current prices in this handy [graph](https://energie.anwb.nl/actuele-tarieven).
 
 Prices are updated every morning around 6am for the next 24hr. This Crow job pulls their API and pushes out a Slack alerts when prices are too high for your taste, allowing you time to turn off stuff and pull out an extra sweater for today ⛄️.
 
