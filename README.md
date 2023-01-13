@@ -13,7 +13,7 @@ Once you have your accounts and channel integration ready, the following steps s
 2. Login to [repeat.dev](https://repeat.dev) and create a `new Repeat` using the `CRON job` template
 3. Copy `cron.ts` from this repository into the editor
 4. Click on the `Events` tab and select the interval. 
-    1. Use the circle to enter my 6:30 am CRON schedule `30 6 * * *`
+    1. Click the `circle` to enter a custom schedule, my 6:30 am = `30 6 * * *`
 5. Click on the `Variables` tab and add the following
     1. `powerThreshold`, the power price (number) per kWh to trigger the alert, for example 1.0
     2. `gasThreshold`, the gas price (number) per m3 to trigger the alert, for example 1.45
