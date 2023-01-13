@@ -82,41 +82,49 @@ export default {
                 power
             } = await fetchTodaysEnergyPrices()
 
-            let gasAlert = gas.highestPrice.price > gasThreshold
-            let pwrAlert = power.highestPrice.price > pwrThreshold
-
             console.log(`gas: high:${formatter.format(gas.highestPrice.price)} low:${formatter.format(gas.lowestPrice.price)}`)
             console.log(`power: high:${formatter.format(power.highestPrice.price)} low:${formatter.format(power.lowestPrice.price)}`)
 
-            env.metrics.write('gas.high', gas.highestPrice.price, "highest");
-            env.metrics.write('gas.low', gas.lowestPrice.price, "lowest");
-            env.metrics.write('power.high', power.highestPrice.price, "highest");
-            env.metrics.write('power.low', power.lowestPrice.price, "lowest");
+            const priceMsg = (resource: string, unit: string, highestPrice: Price, threshold: number) => {
+                return `${resource}: ${formatter.format(highestPrice.price)} > ${formatter.format(threshold)}/${unit} at ${highestPrice.timeStamp.toLocaleString("nl-NL")}`
+            }
+
+            let gasAlert = gas.highestPrice.price > gasThreshold
+            let pwrAlert = power.highestPrice.price > pwrThreshold
+
+            let priceMessages: string[] = [
+                priceMsg("gas", "m3", gas.highestPrice, gasThreshold),
+                priceMsg("power", "kWh", power.highestPrice, pwrThreshold)
+            ]
 
             if (gasAlert || pwrAlert) {
-
-                const alertMsg = (resource: string, unit: string, highestPrice: Price, threshold: number) => {
-                    return `${resource}: ${formatter.format(highestPrice.price)} > ${formatter.format(threshold)}/${unit} at ${highestPrice.timeStamp.toLocaleString("nl-NL")}`
-                }
-
-                let alerts: string[] = []
-
-                gasAlert ? alerts.push(alertMsg("gas", "m3", gas.highestPrice, gasThreshold)) : ""
-                pwrAlert ? alerts.push(alertMsg("power", "kWh", power.highestPrice, pwrThreshold)) : ""
-
-                let msg = `‼️ ANWB price alert‼️  --- ${alerts.join(', ')}`
-                env.webhooks.slack(env.variables.slackUrl, msg);
-                console.log(msg);
+                let msg = `‼️ ANWB price alert‼️  --- ${priceMessages.join(', ')}`
+                env.webhooks.slack(env.variables.slackUrl, msg)
+                console.log(msg)
             } else {
                 console.log("no price alert")
             }
 
-            // track success
-            // metrics can be viewed in "Metrics tab"
+            // push out an alive message on first day of each month
+            if(new Date().getDate() === 1) {
+                let msg = `ANWB monthly ping  --- ${priceMessages.join(', ')}`
+                env.webhooks.slack(env.variables.slackUrl, msg);
+                console.log(msg);
+            }
+
+            // track prices and success
+            env.metrics.write('gas.high', gas.highestPrice.price, "highest");
+            env.metrics.write('gas.low', gas.lowestPrice.price, "lowest");
+            env.metrics.write('power.high', power.highestPrice.price, "highest");
+            env.metrics.write('power.low', power.lowestPrice.price, "lowest");
+            
             env.metrics.write('cron_processed', 1, 'success');
+
         } catch (e) {
             // log error
-            console.error('cron failed!', e.message);
+            let msg = `cron failed!: {e.message}`
+            console.error(msg);
+            env.webhooks.slack(env.variables.slackUrl, msg);
 
             // track failure
             env.metrics.write('cron_processed', 1, 'failure');
