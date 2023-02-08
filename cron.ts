@@ -86,7 +86,7 @@ export default {
             console.log(`power: high:${formatter.format(power.highestPrice.price)} low:${formatter.format(power.lowestPrice.price)}`)
 
             const priceMsg = (resource: string, unit: string, highestPrice: Price, threshold: number) => {
-                return `${resource}: ${formatter.format(highestPrice.price)} > ${formatter.format(threshold)}/${unit} at ${highestPrice.timeStamp.toLocaleString("nl-NL")}`
+                return `${resource}: current: ${formatter.format(highestPrice.price)}/${unit}, threshold: ${formatter.format(threshold)}/${unit}, timestamp: ${highestPrice.timeStamp.toLocaleString("nl-NL")}`
             }
 
             let gasAlert = gas.highestPrice.price > gasThreshold
