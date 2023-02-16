@@ -122,8 +122,8 @@ export default {
 
         } catch (e) {
             // log error
-            let msg = `cron failed!: {e.message}`
-            console.error(msg);
+            let msg = `cron failed!: ${e.message}`
+            console.error(msg, e);
             env.webhooks.slack(env.variables.slackUrl, msg);
 
             // track failure
