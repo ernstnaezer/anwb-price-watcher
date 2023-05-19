@@ -12,6 +12,18 @@ type PriceAggregate = {
     averagerPrice: number
 }
 
+function fetchWithRetry(input: RequestInfo, init?: RequestInit, retryCount: number = 5): Promise<Response> {
+    return fetch(input, init)
+      .catch((error: any) => {
+        if (retryCount <= 0) {
+          throw error;
+        }
+        return new Promise((resolve) => 
+          setTimeout(resolve, 1000))  // Wait for 1 second before retry
+          .then(() => fetchWithRetry(input, init, retryCount - 1));
+      });
+  }
+
 const fetchTodaysEnergyPrices = async (): Promise < {
     gas: PriceAggregate,
     power: PriceAggregate
@@ -31,13 +43,21 @@ const fetchTodaysEnergyPrices = async (): Promise < {
         priceApi.searchParams.append("interval", "4");
         priceApi.searchParams.append("usageType", type);
 
-        const result: any = await fetch(priceApi.href).then(r => r.json())
-        return result.Prices.map((p: any): Price => {
-            return {
-                price: p.price,
-                timeStamp: new Date(Date.parse(p.readingDate))
-            }
-        })
+        return fetchWithRetry(priceApi.href)
+                .then(r => r.json())
+                .then(result => result.Prices.map((p: any): Price => {
+                    return {
+                        price: p.price,
+                        timeStamp: new Date(Date.parse(p.readingDate))
+                    }
+                }))
+                .catch(error => {
+                    // log error
+                    let msg = `failed fetching prices: ${error.message}`
+                    console.error(msg, error);
+                    env.webhooks.slack(env.variables.slackUrl, msg);
+                    return error;
+                })
     }
 
     var today = new Date();
@@ -120,10 +140,10 @@ export default {
             
             env.metrics.write('cron_processed', 1, 'success');
 
-        } catch (e) {
+        } catch (error) {
             // log error
-            let msg = `cron failed!: ${e.message}`
-            console.error(msg, e);
+            let msg = `cron failed!: ${error.message}`
+            console.error(msg, error);
             env.webhooks.slack(env.variables.slackUrl, msg);
 
             // track failure
