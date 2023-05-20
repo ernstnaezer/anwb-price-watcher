@@ -100,7 +100,7 @@ export default {
 
             const { gas, electricity } = await fetchTodaysEnergyPrices()
 
-            //console.log(gas, electricity)
+            console.log(`tresholds gas:${currency.format(gasThreshold)}, electricity:${currency.format(electricityThreshold)}, free electricity: ${currency.format(electricityFreeThreshold)}`)
 
             console.log(`gas: high:${currency.format(gas.highestPrice.price)} low:${currency.format(gas.lowestPrice.price)}`)
             console.log(`electricity: high:${currency.format(electricity.highestPrice.price)} low:${currency.format(electricity.lowestPrice.price)}`)
