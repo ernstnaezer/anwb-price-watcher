@@ -12,64 +12,60 @@ type PriceAggregate = {
     averagerPrice: number
 }
 
-function fetchWithRetry(input: RequestInfo, init?: RequestInit, retryCount: number = 5): Promise<Response> {
-    return fetch(input, init)
-      .catch((error: any) => {
-        if (retryCount <= 0) {
-          throw error;
-        }
-        return new Promise((resolve) => 
-          setTimeout(resolve, 1000))  // Wait for 1 second before retry
-          .then(() => fetchWithRetry(input, init, retryCount - 1));
-      });
-  }
+const delay = (milli:number = 1000) => new Promise( resolve => setTimeout(() => resolve(0), milli)) 
 
-const fetchTodaysEnergyPrices = async (): Promise < {
-    gas: PriceAggregate,
-    power: PriceAggregate
-} > => {
+async function fetchWithRetry(input: string | Request, init?: RequestInit, retryCount: number = 5): Promise<Response> {
+    try {
+        return await fetch(input, init)
+    } catch (error) {
+        if (retryCount <= 0) {
+            throw error
+        }
+        await delay(1000)
+        return await fetchWithRetry(input, init, retryCount - 1)
+    }
+}
+
+async function fetchTodaysEnergyPrices(): Promise<{ gas: PriceAggregate; electricity: PriceAggregate} > {
 
     enum EnergyType {
-        Power = "1",
+        Electricity = "1",
         Gas = "3"
     }
 
-    const fetchPrices = async (type: EnergyType, fromDate: Date, tillDate: Date): Promise < Prices > => {
+    async function fetchPrices(type: EnergyType, fromDate: Date, tillDate: Date): Promise<Prices> {
         const priceApi = new URL("https://api.energyzero.nl/v1/energyprices")
 
-        priceApi.searchParams.append("fromDate", fromDate.toISOString());
-        priceApi.searchParams.append("tillDate", tillDate.toISOString());
-        priceApi.searchParams.append("inclBtw", "true");
-        priceApi.searchParams.append("interval", "4");
-        priceApi.searchParams.append("usageType", type);
+        priceApi.searchParams.append("fromDate", fromDate.toISOString())
+        priceApi.searchParams.append("tillDate", tillDate.toISOString())
+        priceApi.searchParams.append("inclBtw", "true")
+        priceApi.searchParams.append("interval", "4")
+        priceApi.searchParams.append("usageType", type)
 
         return fetchWithRetry(priceApi.href)
-                .then(r => r.json())
-                .then(result => result.Prices.map((p: any): Price => {
-                    return {
-                        price: p.price,
-                        timeStamp: new Date(Date.parse(p.readingDate))
-                    }
-                }))
-                .catch(error => {
-                    // log error
-                    let msg = `failed fetching prices: ${error.message}`
-                    console.error(msg, error);
-                    env.webhooks.slack(env.variables.slackUrl, msg);
-                    return error;
-                })
+            .then(r => r.json())
+            //.then(r => console.log(r))
+            .then( (r:any) => r.Prices.map( (p:any) => {
+                return {
+                    price: p.price,
+                    timeStamp: new Date(Date.parse(p.readingDate))
+                }
+            }))
+            .catch(error => {
+                throw Error(`failed fetching prices: ${error.message}`)
+            })
     }
 
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
+    var today = new Date()
+    today.setHours(0, 0, 0, 0)
 
     var tomorrow = new Date(today)
-    tomorrow.setHours(24, 0, 0, 0);
+    tomorrow.setHours(24, 0, 0, 0)
 
     const gasPrices = await fetchPrices(EnergyType.Gas, today, tomorrow)
-    const powerPrices = await fetchPrices(EnergyType.Power, today, tomorrow)
+    const electricityPrices = await fetchPrices(EnergyType.Electricity, today, tomorrow)
 
-    const aggregate = (prices: Prices): PriceAggregate => {
+    function aggregate(prices: Prices): PriceAggregate {
         return {
             prices,
             highestPrice: prices.reduce((max, entry) => max.price > entry.price ? max : entry),
@@ -80,13 +76,17 @@ const fetchTodaysEnergyPrices = async (): Promise < {
 
     return {
         gas: aggregate(gasPrices),
-        power: aggregate(powerPrices)
+        electricity: aggregate(electricityPrices)
     }
 }
 
-const formatter = new Intl.NumberFormat('nl-NL', {
+const currency = new Intl.NumberFormat('nl-NL', {
     style: 'currency',
     currency: 'EUR'
+})
+
+const shortTime = new Intl.DateTimeFormat("nl-NL", {
+    timeStyle:'short'
 })
 
 export default {
@@ -94,55 +94,62 @@ export default {
         try {
             console.log('running ANWB Energey Watch cron job');
 
-            const gasThreshold: number = env.variables.gasThreshold
-            const pwrThreshold: number = env.variables.powerThreshold
+            const gasThreshold: number = parseFloat(env.variables.gasThreshold)
+            const electricityThreshold: number = parseFloat(env.variables.electricityThreshold)
+            const electricityFreeThreshold: number = parseFloat(env.variables.electricityFreeThreshold)
 
-            const {
-                gas,
-                power
-            } = await fetchTodaysEnergyPrices()
+            const { gas, electricity } = await fetchTodaysEnergyPrices()
 
-            console.log(`gas: high:${formatter.format(gas.highestPrice.price)} low:${formatter.format(gas.lowestPrice.price)}`)
-            console.log(`power: high:${formatter.format(power.highestPrice.price)} low:${formatter.format(power.lowestPrice.price)}`)
+            //console.log(gas, electricity)
 
-            const priceMsg = (resource: string, unit: string, highestPrice: Price, threshold: number) => {
-                return `${resource}: current: ${formatter.format(highestPrice.price)}/${unit}, threshold: ${formatter.format(threshold)}/${unit}, timestamp: ${highestPrice.timeStamp.toLocaleString("nl-NL")}`
-            }
+            console.log(`gas: high:${currency.format(gas.highestPrice.price)} low:${currency.format(gas.lowestPrice.price)}`)
+            console.log(`electricity: high:${currency.format(electricity.highestPrice.price)} low:${currency.format(electricity.lowestPrice.price)}`)
 
-            let gasAlert = gas.highestPrice.price > gasThreshold
-            let pwrAlert = power.highestPrice.price > pwrThreshold
-
-            let priceMessages: string[] = [
-                priceMsg("gas", "m3", gas.highestPrice, gasThreshold),
-                priceMsg("power", "kWh", power.highestPrice, pwrThreshold)
-            ]
-
-            if (gasAlert || pwrAlert) {
-                let msg = `‼️ ANWB price alert‼️  --- ${priceMessages.join(', ')}`
+            let gasAlert = gas.highestPrice.price >= gasThreshold
+            if(gasAlert) {
+                let msg = `‼️ gas price ‼️ --- high: ${currency.format(gas.highestPrice.price)}/m3 at ${shortTime.format(gas.highestPrice.timeStamp)}, low: ${currency.format(gas.lowestPrice.price)}/m3 at ${shortTime.format(gas.lowestPrice.timeStamp)}`
                 env.webhooks.slack(env.variables.slackUrl, msg)
                 console.log(msg)
-            } else {
-                console.log("no price alert")
+                await delay()
+            }
+
+            let electricityAlert = electricity.highestPrice.price >= electricityThreshold
+            if(electricityAlert) {
+                let msg = `‼️ electricity price ‼️ --- high:${currency.format(electricity.highestPrice.price)}/kWh at ${shortTime.format(electricity.highestPrice.timeStamp)}, low:${currency.format(electricity.lowestPrice.price)}/kWh at ${shortTime.format(electricity.lowestPrice.timeStamp)}`
+                env.webhooks.slack(env.variables.slackUrl, msg)
+                console.log(msg)
+                await delay()
+            }
+
+            let freeElectricityHours = electricity.prices.filter(price => price.price <= electricityFreeThreshold)
+            if(freeElectricityHours.length > 0) {
+                let msg = `🤑 free electricity 🤑 --- ${freeElectricityHours.map(p => shortTime.format(p.timeStamp)).join(", ")}`
+                env.webhooks.slack(env.variables.slackUrl, msg)
+                console.log(msg)
+                await delay()
             }
 
             // push out an alive message on first day of each month
             if(new Date().getDate() === 1) {
-                let msg = `ANWB monthly ping  --- ${priceMessages.join(', ')}`
+                let msg = `⏰ monthly ping ⏰ 
+--- gas: high: ${currency.format(gas.highestPrice.price)}/m3 at ${shortTime.format(gas.highestPrice.timeStamp)}, low: ${currency.format(gas.lowestPrice.price)}/m3 at ${shortTime.format(gas.lowestPrice.timeStamp)}
+--- electricity: high:${currency.format(electricity.highestPrice.price)}/kWh at ${shortTime.format(electricity.highestPrice.timeStamp)}, low:${currency.format(electricity.lowestPrice.price)}/kWh at ${shortTime.format(electricity.lowestPrice.timeStamp)}`
                 env.webhooks.slack(env.variables.slackUrl, msg);
                 console.log(msg);
+                await delay()
             }
 
             // track prices and success
             env.metrics.write('gas.high', gas.highestPrice.price, "highest");
             env.metrics.write('gas.low', gas.lowestPrice.price, "lowest");
-            env.metrics.write('power.high', power.highestPrice.price, "highest");
-            env.metrics.write('power.low', power.lowestPrice.price, "lowest");
+            env.metrics.write('electricity.high', electricity.highestPrice.price, "highest");
+            env.metrics.write('electricity.low', electricity.lowestPrice.price, "lowest");
             
             env.metrics.write('cron_processed', 1, 'success');
 
         } catch (error) {
             // log error
-            let msg = `cron failed!: ${error.message}`
+            let msg = `cron failed: ${error.message}`
             console.error(msg, error);
             env.webhooks.slack(env.variables.slackUrl, msg);
 
