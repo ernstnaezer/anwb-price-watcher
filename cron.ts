@@ -12,6 +12,47 @@ type PriceAggregate = {
     averagerPrice: number
 }
 
+const currency = new Intl.NumberFormat('nl-NL', {
+    style: 'currency',
+    currency: 'EUR'
+})
+
+const shortTime = new Intl.DateTimeFormat("nl-NL", {
+    timeStyle:'short'
+})
+
+function getReadableTimeslots(timestamps: Date[]): string {
+
+    const timeStrings = timestamps.map( stamp => shortTime.format(stamp))
+
+    if (timeStrings.length === 0) {
+        return '';
+    }
+
+    // Sort the array first
+    timeStrings.sort();
+
+    // Convert times to hour numbers for easier manipulation
+    const times: number[] = timeStrings.map(timeString => parseInt(timeString.split(':')[0], 10));
+
+    let start = times[0];
+    let end = start + 1;
+    let slots: string[] = [];
+
+    for (let i = 1; i < times.length; i++) {
+        if (times[i] === end) {
+            end++;  
+        } else {
+            slots.push(`between ${start}:00 and ${end}:00`);
+            start = times[i];
+            end = start + 1;
+        }
+    }
+
+    slots.push(`between ${start}:00 and ${end}:00`);
+    return slots.join(' and ');
+}   
+
 const delay = (milli:number = 1000) => new Promise( resolve => setTimeout(() => resolve(0), milli)) 
 
 async function fetchWithRetry(input: string | Request, init?: RequestInit, retryCount: number = 5): Promise<Response> {
@@ -80,15 +121,6 @@ async function fetchTodaysEnergyPrices(): Promise<{ gas: PriceAggregate; electri
     }
 }
 
-const currency = new Intl.NumberFormat('nl-NL', {
-    style: 'currency',
-    currency: 'EUR'
-})
-
-const shortTime = new Intl.DateTimeFormat("nl-NL", {
-    timeStyle:'short'
-})
-
 export default {
     async cron(cron: Repeat.Cron, env: Repeat.Env): Promise < void > {
         try {
@@ -123,7 +155,7 @@ export default {
 
             let freeElectricityHours = electricity.prices.filter(price => price.price <= electricityFreeThreshold)
             if(freeElectricityHours.length > 0) {
-                let msg = `🤑 free electricity 🤑 --- ${freeElectricityHours.map(p => shortTime.format(p.timeStamp)).join(", ")}`
+                let msg = `🤑 free electricity 🤑 --- ${getReadableTimeslots(freeElectricityHours.map( e => e.timeStamp))}`
                 env.webhooks.slack(env.variables.slackUrl, msg)
                 console.log(msg)
                 await delay()
