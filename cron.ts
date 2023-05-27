@@ -18,19 +18,17 @@ const currency = new Intl.NumberFormat('nl-NL', {
 })
 
 const shortTime = new Intl.DateTimeFormat("nl-NL", {
+    timeZone: 'Europe/Amsterdam',  
     timeStyle:'short'
 })
 
-function getReadableTimeslots(timestamps: Date[]): string {
+function getReadableTimeslots(prices: Price[]): string {
 
-    const timeStrings = timestamps.map( stamp => shortTime.format(stamp))
+    const timeStrings = prices.map ( price => shortTime.format(price.timeStamp) )
 
     if (timeStrings.length === 0) {
         return '';
     }
-
-    // Sort the array first
-    timeStrings.sort();
 
     // Convert times to hour numbers for easier manipulation
     const times: number[] = timeStrings.map(timeString => parseInt(timeString.split(':')[0], 10));
@@ -43,13 +41,13 @@ function getReadableTimeslots(timestamps: Date[]): string {
         if (times[i] === end) {
             end++;  
         } else {
-            slots.push(`between ${start}:00 and ${end}:00`);
+            slots.push(`between ${start}:00 and ${end}:00 ${currency.format(prices[i].price)}`);
             start = times[i];
             end = start + 1;
         }
     }
 
-    slots.push(`between ${start}:00 and ${end}:00`);
+    slots.push(`between ${start}:00 and ${end}:00 ${currency.format(prices[0].price)}`);
     return slots.join(' and ');
 }   
 
@@ -89,7 +87,7 @@ async function fetchTodaysEnergyPrices(): Promise<{ gas: PriceAggregate; electri
             .then( (r:any) => r.Prices.map( (p:any) => {
                 return {
                     price: p.price,
-                    timeStamp: new Date(Date.parse(p.readingDate))
+                    timeStamp: new Date(p.readingDate)
                 }
             }))
             .catch(error => {
@@ -155,7 +153,7 @@ export default {
 
             let freeElectricityHours = electricity.prices.filter(price => price.price <= electricityFreeThreshold)
             if(freeElectricityHours.length > 0) {
-                let msg = `🤑 free electricity 🤑 --- ${getReadableTimeslots(freeElectricityHours.map( e => e.timeStamp))}`
+                let msg = `🤑 free electricity 🤑 --- ${getReadableTimeslots(freeElectricityHours)}`
                 env.webhooks.slack(env.variables.slackUrl, msg)
                 console.log(msg)
                 await delay()
